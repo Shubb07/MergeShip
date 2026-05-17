@@ -174,18 +174,9 @@ export async function updateMutePreferences(
 const profileUpdateSchema = z.object({
   bio: z.string().max(280, 'Bio must be 280 characters or less').optional().nullable(),
 
-  skills: z
-    .array(z.string())
-    .max(10, 'Maximum 10 skills allowed')
-    .optional()
-    .nullable(),
+  skills: z.array(z.string()).max(10, 'Maximum 10 skills allowed').optional().nullable(),
 
-  website_url: z
-    .string()
-    .url('Please enter a valid URL')
-    .optional()
-    .nullable()
-    .or(z.literal('')),
+  website_url: z.string().url('Please enter a valid URL').optional().nullable().or(z.literal('')),
 
   twitter_handle: z
     .string()
@@ -200,9 +191,7 @@ export type ProfileUpdateData = z.infer<typeof profileUpdateSchema>;
 /**
  * Update user profile information (bio, skills, social links)
  */
-export async function updateProfile(
-  data: ProfileUpdateData,
-): Promise<Result<{ message: string }>> {
+export async function updateProfile(data: ProfileUpdateData): Promise<Result<{ message: string }>> {
   const sb = getServerSupabase();
 
   if (!sb) {
