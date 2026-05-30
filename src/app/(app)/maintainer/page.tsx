@@ -5,11 +5,22 @@ import { isUserMaintainer } from '@/lib/maintainer/detect';
 import {
   getMaintainerInstalls,
   getMaintainerPrQueue,
-  type MaintainerInstall,
-  type MaintainerPrRow,
+  getMaintainerAnalyticsTrends,
+  getRepoHealthOverview,
+  getStaleIssues,
+  getTopContributors,
+  type RepoHealthRow,
+  type StaleIssueRow,
+  type ContributorRow,
 } from '@/app/actions/maintainer';
+import type { MaintainerInstall } from '@/lib/maintainer/detect';
+import type { MaintainerPrRow } from '@/lib/maintainer/queue';
+import type { MaintainerAnalyticsTrends } from '@/lib/maintainer/analytics';
 import { isOk } from '@/lib/result';
 import RefreshButton from './refresh-button';
+import CiStatusBadge from './ci-status-badge';
+import AnalyticsTrends from './analytics-trends';
+import ExportCsvButton from './export-csv-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +35,7 @@ export default async function MaintainerPage({
 }: {
   searchParams: { install?: string; state?: string; verified?: string };
 }) {
-  const sb = getServerSupabase();
+  const sb = await getServerSupabase();
   if (!sb) {
     return <NotConfigured />;
   }
@@ -67,6 +78,18 @@ export default async function MaintainerPage({
     filters,
   });
   const rows: MaintainerPrRow[] = isOk(queueRes) ? queueRes.data.rows : [];
+  const trendsRes = await getMaintainerAnalyticsTrends({ installationId: activeInstallId });
+  const analyticsTrends: MaintainerAnalyticsTrends = isOk(trendsRes)
+    ? trendsRes.data
+    : { weekly: [], levelDistribution: [] };
+  const repoHealthRes = await getRepoHealthOverview();
+  const repoHealthRows: RepoHealthRow[] = isOk(repoHealthRes) ? repoHealthRes.data : [];
+
+  const staleIssuesRes = await getStaleIssues();
+  const staleIssues: StaleIssueRow[] = isOk(staleIssuesRes) ? staleIssuesRes.data : [];
+
+  const contributorsRes = await getTopContributors();
+  const topContributors: ContributorRow[] = isOk(contributorsRes) ? contributorsRes.data : [];
 
   return (
     <div className="min-h-screen bg-zinc-950 px-6 py-12 text-white">
@@ -127,12 +150,15 @@ export default async function MaintainerPage({
             href={withParam('verified', '', searchParams)}
             active={!searchParams.verified}
           />
-          <Link
-            href={`/maintainer/issues?install=${activeInstallId}`}
-            className="ml-auto rounded-lg border border-zinc-700 px-3 py-1 text-zinc-300 hover:border-zinc-600"
-          >
-            Issue triage →
-          </Link>
+          <div className="ml-auto flex items-center gap-2">
+            <ExportCsvButton installationId={activeInstallId} filters={filters} />
+            <Link
+              href={`/maintainer/issues?install=${activeInstallId}`}
+              className="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-300 hover:border-zinc-600"
+            >
+              Issue triage →
+            </Link>
+          </div>
           <Link
             href={`/maintainer/community?install=${activeInstallId}`}
             className="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-300 hover:border-zinc-600"
@@ -144,6 +170,77 @@ export default async function MaintainerPage({
         <p className="mb-4 text-xs text-zinc-500">
           {activeInstall.accountLogin} ({activeInstall.permissionLevel.replace('_', ' ')})
         </p>
+        <AnalyticsTrends data={analyticsTrends} />
+        <div className="mb-8 grid gap-6 lg:grid-cols-3">
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+            <h2 className="mb-4 text-sm font-semibold text-white">Repository Health</h2>
+
+            <div className="space-y-3">
+              {repoHealthRows.map((repo) => (
+                <div key={repo.repoFullName} className="rounded-lg border border-zinc-800 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-zinc-200">{repo.repoFullName}</span>
+
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        repo.repoHealthScore >= 80
+                          ? 'bg-emerald-900/40 text-emerald-300'
+                          : repo.repoHealthScore >= 50
+                            ? 'bg-yellow-900/40 text-yellow-300'
+                            : 'bg-red-900/40 text-red-300'
+                      }`}
+                    >
+                      {repo.repoHealthScore}%
+                    </span>
+                  </div>
+
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Updated {relativeTime(repo.updatedAt ?? new Date().toISOString())}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+            <h2 className="mb-4 text-sm font-semibold text-white">Stale Issues</h2>
+
+            <div className="space-y-3">
+              {staleIssues.map((issue) => (
+                <div key={issue.id} className="rounded-lg border border-zinc-800 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-zinc-200">{issue.title}</span>
+
+                    <span className="text-xs text-red-400">{issue.daysStale}d stale</span>
+                  </div>
+
+                  <p className="mt-2 text-xs text-zinc-500">{issue.repoFullName}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+            <h2 className="mb-4 text-sm font-semibold text-white">Top Contributors</h2>
+
+            <div className="space-y-3">
+              {topContributors.map((contributor) => (
+                <div
+                  key={contributor.githubHandle}
+                  className="flex items-center justify-between rounded-lg border border-zinc-800 p-3"
+                >
+                  <div>
+                    <p className="text-sm text-zinc-200">@{contributor.githubHandle}</p>
+
+                    <p className="text-xs text-zinc-500">Level {contributor.level}</p>
+                  </div>
+
+                  <span className="text-sm text-emerald-400">{contributor.xp} XP</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
 
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-zinc-400">
@@ -157,7 +254,12 @@ export default async function MaintainerPage({
                 className="flex items-start gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CiStatusBadge
+                      installationId={activeInstallId}
+                      repoFullName={r.repoFullName}
+                      prNumber={r.number}
+                    />
                     <a
                       href={r.url}
                       target="_blank"

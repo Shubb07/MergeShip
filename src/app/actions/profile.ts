@@ -22,7 +22,7 @@ type BootstrapOutput = {
  * Safe to call repeatedly — UPSERTs profile and only fires audit if not yet completed.
  */
 export async function bootstrapProfile(): Promise<Result<BootstrapOutput>> {
-  const sb = getServerSupabase();
+  const sb = await getServerSupabase();
   if (!sb) return err('not_configured', 'auth not configured on this deployment');
 
   const {
