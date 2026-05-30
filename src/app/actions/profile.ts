@@ -120,7 +120,7 @@ export async function updateMutePreferences(
   mutedRepos: string[],
   mutedLanguages: string[],
 ): Promise<Result<void>> {
-  const sb = getServerSupabase();
+  const sb = await getServerSupabase();
 
   if (!sb) {
     return err('not_configured', 'auth not configured');
@@ -192,7 +192,7 @@ export type ProfileUpdateData = z.infer<typeof profileUpdateSchema>;
  * Update user profile information (bio, skills, social links)
  */
 export async function updateProfile(data: ProfileUpdateData): Promise<Result<{ message: string }>> {
-  const sb = getServerSupabase();
+  const sb = await getServerSupabase();
 
   if (!sb) {
     return err('not_configured', 'Authentication not configured');
