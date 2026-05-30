@@ -828,7 +828,7 @@ export async function getTopContributors(): Promise<Result<ContributorRow[]>> {
 export async function getMaintainerAnalyticsTrends(args: {
   installationId: number;
 }): Promise<Result<MaintainerAnalyticsTrends>> {
-  const sb = getServerSupabase();
+  const sb = await getServerSupabase();
 
   if (!sb) {
     return err('not_configured', 'auth not configured');
